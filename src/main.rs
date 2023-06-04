@@ -1,11 +1,23 @@
-use std::{fs::{DirEntry, create_dir_all, self, File}, path::{Path, self}, io::{Result, Write}, os::{unix::prelude::PermissionsExt},};
+use std::{
+    fs::{DirEntry, create_dir_all, read_dir}, 
+    path::{Path}, 
+    io::{Result}
+};
 
+mod comments;
+mod args;
+mod utils;
+
+use args::Args;
 use clap::Parser;
+use utils::{makedirs, write_data};
 
+use crate::utils::read_to_strings;
 
 fn visit_dirs(dir: &Path, cb: &dyn Fn(&DirEntry)) -> Result<()> {
     if dir.is_dir() {
-        for entry in fs::read_dir(dir)? {
+        for entry in read_dir(dir)?
+        .filter(|x| !x.as_ref().unwrap().path().to_str().unwrap().ends_with(".git") ) {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -18,152 +30,37 @@ fn visit_dirs(dir: &Path, cb: &dyn Fn(&DirEntry)) -> Result<()> {
     Ok(())
 }
 
-fn remove_comments(lines: Vec<String>) -> String {
-    let mut output = Vec::new();
-    for line in lines {
-        if line.contains("//") {
-
-            if line.trim().starts_with("//") {
-                continue;
-            }
-            
-            let idx = line.find("//").unwrap();
-
-            if line.contains("://") {
-                output.push(line.clone());
-                continue;
-            }
-
-            if line.contains('\'') || line.contains('"') {
-                let q_idx = line.find('\'');
-                if let Some(q_idx) = q_idx {
-                    let r_q = line.find('\'').unwrap();
-                    if q_idx < idx && idx < r_q {
-                        output.push(line.clone());
-                        continue;
-                    }
+fn go(args: Args) {
+    let (file, extension, out_dir) = (args.file, args.extension.as_str(), args.out);
+    
+    visit_dirs(Path::new(&file), &|entry: &DirEntry| {
+        match &entry.clone().path().file_name().unwrap().to_str().unwrap().ends_with(extension) {
+            true => {
+                let target = entry.path().to_str().unwrap().to_owned();
+                println!("[*] Cleaning: {}", target);
+                let data: Vec<String> = read_to_strings(&target);
+                match makedirs(&entry.path(), Path::new(&out_dir)) {
+                    Ok(_out_file) => {
+                        write_data(&comments::clean_comments(data), _out_file.to_str().unwrap());
+                        println!("[+] Comments removed from: {}", target);
+                    },
+                    Err(e) => { println!("[-] Error creating directory: {} | {e}", entry.path().to_str().unwrap()); }
                 }
-
-                let q_idx = line.find('"');
-                if let Some(q_idx) = q_idx {
-                    let r_q = line.find('"').unwrap();
-                    if q_idx < idx && idx < r_q {
-                        output.push(line.clone());
-                        continue;
-                    }
+            },
+            false => {
+                match makedirs(&entry.path(), Path::new(&out_dir)) {
+                    Ok(out_file) => { std::fs::copy(entry.path(), out_file).unwrap(); },
+                    Err(e) => { println!("[-] Error creating directory: {} | {e}", entry.path().to_str().unwrap()); } 
                 }
-            }
-
-            output.push(format!("{}", line[..idx].trim()));
-            continue;
+            },
         }
-        output.push(line.clone());
-    }
-    //output.remove(0);
-
-    let output = output
-        .iter()
-        .filter(|x| !x.is_empty())
-        .map(|x| format!("{}", x))
-        .collect::<Vec<String>>();
-    output.join("\n")
-}
-
-
-#[derive(Parser, Debug)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-   
-    #[arg(short, long)]
-    file: String,
-
-    #[arg(short, long)]
-    extension: String,
-
-    #[arg(short, long, default_value = "./obfuscated")]
-    out: String,
-}
-
-fn write_data(data: &str, path: &str) {
-    let mut file = File::create(path).unwrap();
-    file.write_all(data.as_bytes()).unwrap();
-}
-
-fn makedirs(entry: &DirEntry, outpath: &Path) -> Result<()> {
-    let parent = entry.path().parent().unwrap().to_path_buf();
-    match create_dir_all(path::Path::join(outpath, &parent)) {
-        Ok(_) => {
-            let o = path::Path::join(outpath, 
-                entry.path().to_str().unwrap().to_owned());
-                //fs::set_permissions(o, Permissions::from_mode(0o777)).unwrap();
-            Ok(())
-        },
-        Err(e) => {
-            println!("Error creating directory: {}", parent.to_str().unwrap());
-            Err(e)
-        },
-    }
+    }).expect("[-] Error cleaning files")
 }
 
 fn main() {
-    let args = Args::parse();
-
-    let file = args.file;
-    let extension = args.extension.as_str();
-    let out_dir = args.out;
-
-    let outpath = Path::new(&out_dir);
-
-    fs::create_dir_all(outpath).unwrap();
-
-    visit_dirs(Path::new(&file), &|entry: &DirEntry| {
-        let binding = entry.path();
-        
-        let entry_file = binding.file_name().unwrap().to_str().unwrap();
-
-        match entry_file.ends_with(extension) {
-            true => {
-                let file_path = binding.to_str().unwrap();
-
-                println!("[*] Cleaning: {}", file_path);
-                let data = fs::read_to_string(file_path).unwrap();
-
-                let removed_comments = remove_comments(data.split("\n").map(|x | x.to_owned()).collect::<Vec<String>>());
-
-                let parent = binding.parent().unwrap().to_path_buf();
-
-                match create_dir_all(path::Path::join(outpath, &parent)) {
-                    Ok(_) => {},
-                    Err(_) => {
-                        println!("Error creating directory: {}", parent.to_str().unwrap());
-                    },
-                }
-
-                let out = path::Path::join(outpath, file_path);
-
-                write_data(&removed_comments, out.to_str().unwrap());
-
-                let mut perms = fs::metadata(out).unwrap().permissions();
-                perms.set_mode(0o777);
-
-
-                println!("[+] Comments removed from: {}", file_path);
-            },
-            false => {
-                //let out = path::Path::join(outpath, entry.path().to_str().unwrap().to_owned());
-                let out = path::Path::join(outpath, entry.path().to_str().unwrap().to_owned());
-                match makedirs(entry, outpath) {
-                    Ok(_) => {
-                        std::fs::copy(entry.path(), &out).unwrap();
-                        let mut perms = fs::metadata(out).unwrap().permissions();
-                        perms.set_mode(0o777);
-                    },
-                    Err(_) => {
-                        println!("Error creating directory: {}", entry.path().to_str().unwrap());
-                    },
-                }
-            },
-        }
-    }).expect("Error cleaning files")
-
+    let args = args::Args::parse();
+    match create_dir_all(Path::new(&args.out)) {
+        Ok(_) => { go(args); }
+        Err(e) => { println!("Error creating output directory: {} | {e}", &args.out); }
+    }
 }
