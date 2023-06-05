@@ -94,12 +94,14 @@ fn is_comment(
     (chars, i, char_len, token): (&Vec<char>, usize, usize, &Token) ) -> bool {
     match token.comment_tokens.1 {
         Some(right) => {
-            if i + 1 < char_len && chars[i] == token.comment_tokens.0 && chars[i + 1] == right { return token.callback((chars, i, char_len)) }
-            //return token.callback((chars, i, char_len));
+            if i + 1 < char_len && chars[i] == token.comment_tokens.0 && chars[i + 1] == right { 
+                return token.callback((chars, i, char_len)) 
+            }
         },
         None => {
-            if i + 1 < char_len && chars[i] == token.comment_tokens.0 { return token.callback((chars, i, char_len)) }
-            //return token.callback((chars, i, char_len));
+            if i + 1 < char_len && chars[i] == token.comment_tokens.0 { 
+                return token.callback((chars, i, char_len)) 
+            }
         }
     }
     false
@@ -107,6 +109,8 @@ fn is_comment(
 
 fn is_comment_block( 
     (s, i, char_len, token): (&Vec<char>, usize, usize, &Token) ) -> bool {
-    if i + 1 < char_len && s[i] == token.block_open_left && s[i + 1] == token.block_open_right { return token.callback((s, i, char_len)) }
+    if i + 1 < char_len && s[i] == token.block_open_left && s[i + 1] == token.block_open_right { 
+        return token.callback((s, i, char_len)) 
+    }
     false
 }
