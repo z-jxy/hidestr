@@ -1,25 +1,21 @@
-use std::{
-    fs::{DirEntry, create_dir_all, read_dir}, 
-    path::{Path}, 
-    io::{Result},
-};
+use std::{ fs::{DirEntry, create_dir_all, read_dir}, path::{Path}, io::{Result} };
 
 mod tokenizer;
-
 mod comments;
 mod args;
 mod utils;
 
 use args::Args;
 use clap::Parser;
-use utils::{makedirs, write_data};
-
-use crate::{utils::read_to_strings, tokenizer::Token};
+use utils::{makedirs, write_data, read_to_strings};
+use tokenizer::Token;
 
 fn visit_dirs(dir: &Path, cb: &dyn Fn(&DirEntry)) -> Result<()> {
     if dir.is_dir() {
         for entry in read_dir(dir)?
-        .filter(|x| !x.as_ref().unwrap().path().to_str().unwrap().ends_with(".git") ) {
+        // we don't need to clean git files
+        .filter(|x| !x.as_ref().unwrap().path().to_str().unwrap().ends_with(".git")
+           ) {
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -75,6 +71,10 @@ fn main() {
     let metadata = std::fs::metadata(&args.file);
     match metadata {
         Ok(_) => { 
+            if metadata.is_err() {
+                println!("[-] Error checking file metadata: {} | {}", &args.file, metadata.err().unwrap());
+                return;
+            }
             match metadata.unwrap().is_dir() {
                 true => { 
                     if !args.recursive {
@@ -91,7 +91,7 @@ fn main() {
                 }
             }
          }
-        Err(e) => { println!("Error checking output directory: {} | {e}", &args.out); }
+        Err(e) => { println!("Error checking file directory: {} | {e}", &args.file); }
     }
     let target_token = Token::get_token_type(&args.extension);
     match create_dir_all(Path::new(&args.out)) {

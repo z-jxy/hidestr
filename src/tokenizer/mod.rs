@@ -13,17 +13,17 @@ pub struct Token {
 }
 
 impl Token {
-    pub fn new(comment_ident: &str, sboi: &str, sbei: &str) -> Self {
-        let (script_open_left, script_open_right) = (sboi.chars().nth(0).unwrap(), sboi.chars().nth(1).unwrap());
+    pub fn new(comment_ident: &str, sb_open_ident: &str, sb_end_ident: &str) -> Self {
+        let (script_open_left, script_open_right) = (sb_open_ident.chars().nth(0).unwrap(), sb_open_ident.chars().nth(1).unwrap());
 
         Self {
             comment_ident: String::from(comment_ident),
-            script_block_open_ident: String::from(sboi),
-            script_block_close_ident: String::from(sbei),
+            script_block_open_ident: String::from(sb_open_ident),
+            script_block_close_ident: String::from(sb_end_ident),
             block_open_left: script_open_left,
             block_open_right: script_open_right,
-            block_close_left: sbei.chars().nth(0).unwrap(),
-            block_close_right: sbei.chars().nth(1).unwrap(),
+            block_close_left: sb_end_ident.chars().nth(0).unwrap(),
+            block_close_right: sb_end_ident.chars().nth(1).unwrap(),
             comment_ident_len: comment_ident.len(),
             comment_tokens: Self::tokens_from_ident(comment_ident.len(), comment_ident),
         }
@@ -37,17 +37,17 @@ impl Token {
     }
 
     pub fn get_token_type(s: &str) -> Token {
-        let t = TOKENS::from(s);
+        let t = TOKENS::from_extension(s);
         println!("Using token: {:?}", t);
         return t.to_token();
     }
 
     pub fn callback(&self, (chars, i, char_len): (&Vec<char>, usize, usize) ) -> bool {
-        let t = TOKENS::from_tokens(self);
+        let t = TOKENS::from_token(self);
         match t {
             TOKENS::POWERSHELL => {
                 if i + 2 < char_len && chars[i + 1] == 'r' { 
-                    //#require statement
+                    // this means it's a #require statement
                     return false; 
                 }
                 true
@@ -62,7 +62,7 @@ impl Token {
 #[derive(Debug)]
 pub enum TOKENS {
     POWERSHELL, // Powershell
-    C, // C, C++, C#, etc.
+    C, // C, C++, C#, etc. (should work for any language that uses C-style comments)
 }
 
 impl TOKENS {
@@ -73,7 +73,7 @@ impl TOKENS {
         }
     }
 
-    fn from(ext: &str) -> Self {
+    fn from_extension(ext: &str) -> Self {
         match ext.trim_start_matches('.') {
             "ps1" => TOKENS::POWERSHELL,
             "cs" | "c" | "cpp" | "h" | "hpp" | "cc" => TOKENS::C,
@@ -81,11 +81,11 @@ impl TOKENS {
         }
     }
 
-    fn from_tokens(tokens: &Token) -> Self {
-        match tokens.comment_ident.as_str() {
+    fn from_token(token: &Token) -> Self {
+        match token.comment_ident.as_str() {
             "#" => TOKENS::POWERSHELL,
             "//" => TOKENS::C,
-            _ => panic!("[-] Unknown comment token: {}", tokens.comment_ident),
+            _ => panic!("[-] Unknown comment token: {}", token.comment_ident),
         }
     }
 }
