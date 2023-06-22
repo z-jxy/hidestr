@@ -3,8 +3,7 @@
 I just wanted an excuse to write Rust.
 
 This tool allows you to remove all comments from a file. 
-Originally, I intended to only use it for ps1 files, but ended up just extending the flexability of the tokens, so it could also be used for other languages.
-At the moment, it's only meant to be used with `.ps1` files.
+Originally, I intended to only use this for powershell scripts as part of a CI/CD setup, but ended up just reworking how the parsing is done so that it _could_ also be used for other languages. But it's still really only meant to be used with `.ps1` files.
 (It also works with languages that use C-style comments like c++, c#, etc, but this doesn't really make any difference since comments aren't included when compiling, I just felt like adding it lol.
 
 This tool should be able to identify:
